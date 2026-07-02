@@ -137,6 +137,13 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
+// أضف هذا المسار للترحيب بالمستخدم عند زيارة الرابط الرئيسي
+app.get('/', (req, res) => {
+  res.json({ message: 'مرحباً بك في نظام Arimas Gym Backend!' });
+});
+
+// هذا هو السطر الذي يظهر الخطأ، اتركه كما هو في الأسفل
+app.use((req, res) => res.status(404).json({ error: 'المسار غير موجود.' }));
 
 app.use((req, res) => res.status(404).json({ error: 'المسار غير موجود.' }));
 

@@ -483,6 +483,21 @@
         }
 
         .login-security-note { text-align: center; font-size: 11px; color: #94a3b8; display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+        /* ========================================= */
+        /* عناصر مشتركة للنماذج المتصلة بالـ API */
+        /* ========================================= */
+        .dark-field-label { font-size: 11px; color: #9ca3af; display: block; margin-bottom: 6px; text-align: right; }
+        .dark-field-input {
+            width: 100%; background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 11px 14px;
+            color: #fff; font-size: 13px; font-family: 'Cairo', sans-serif; margin-bottom: 14px; outline: none;
+        }
+        .dark-field-input:focus { border-color: #2563eb; }
+        .dark-field-input::placeholder { color: #4b5563; }
+
+        .auth-message { display: none; font-size: 12px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; text-align: center; }
+        .auth-message.error { background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .auth-message.success { background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
     </style>
 </head>
 <body>
@@ -517,13 +532,9 @@
                 <li>الزي الموحد</li>
                 <li>الباقات</li>
             </ul>
-            <div id="menuLoggedOutBlock">
+            <div id="menuAuthArea">
                 <button class="btn-login-outline" onclick="navigateTo('login')">تسجيل الدخول</button>
                 <a href="javascript:void(0)" class="btn-signup-full" onclick="navigateTo('signup')">ابدأ الآن مجاناً</a>
-            </div>
-            <div id="menuLoggedInBlock" style="display:none;">
-                <p style="font-size:13px; color:#64748b; margin-bottom:10px;">مسجل الدخول كـ <strong id="menuUserName"></strong></p>
-                <button class="btn-login-outline" onclick="handleLogout()">تسجيل الخروج</button>
             </div>
         </div>
     </div>
@@ -835,26 +846,27 @@
                 <h2>اختر طريقة التسجيل</h2>
                 <p class="card-subtitle">سجل باستخدام Google أو أكمل التسجيل يدوياً.</p>
 
-                <button class="btn-google" onclick="alert('تسجيل الدخول بجوجل غير مفعّل حالياً في هذه النسخة.')">
+                <button class="btn-google">
                     <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/web-24dp/logo_googleg_color_24dp.png" alt="Google Logo">
                     التسجيل بواسطة Google
                 </button>
 
                 <div class="divider">أو</div>
 
-                <div id="signupErrorBox" style="display:none; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:12px; text-align:right;"></div>
+                <form id="signupForm" onsubmit="return handleSignup(event)">
+                    <label class="dark-field-label">الاسم</label>
+                    <input type="text" id="signupNameInput" class="dark-field-input" placeholder="اسمك الكامل">
 
-                <div class="login-input-wrapper" style="text-align:right;">
-                    <input type="text" id="signupNameInput" placeholder="الاسم بالكامل" style="width:100%; padding:12px; border-radius:8px; border:1px solid #1f2937; background:#0b1329; color:#fff;">
-                </div>
-                <div class="login-input-wrapper" style="text-align:right; margin-top:10px;">
-                    <input type="tel" id="signupPhoneInput" placeholder="رقم الهاتف 01xxxxxxxxx" style="width:100%; padding:12px; border-radius:8px; border:1px solid #1f2937; background:#0b1329; color:#fff;">
-                </div>
-                <div class="login-input-wrapper" style="text-align:right; margin-top:10px;">
-                    <input type="password" id="signupPasswordInput" placeholder="كلمة المرور (6 أحرف على الأقل)" style="width:100%; padding:12px; border-radius:8px; border:1px solid #1f2937; background:#0b1329; color:#fff;">
-                </div>
+                    <label class="dark-field-label">رقم الهاتف</label>
+                    <input type="tel" id="signupPhoneInput" class="dark-field-input" placeholder="05xxxxxxxx" required>
 
-                <button class="btn-submit" id="signupSubmitBtn" onclick="handleSignup()" style="margin-top:12px;">إنشاء الحساب ←</button>
+                    <label class="dark-field-label">كلمة المرور</label>
+                    <input type="password" id="signupPasswordInput" class="dark-field-input" placeholder="6 أحرف على الأقل" required minlength="6">
+
+                    <div id="signupMessage" class="auth-message"></div>
+
+                    <button class="btn-submit" type="submit" id="signupSubmitBtn">إنشاء الحساب ←</button>
+                </form>
             </div>
 
             <a href="javascript:void(0)" class="back-link" onclick="navigateTo('home')">← العودة للصفحة الرئيسية</a>
@@ -1084,36 +1096,38 @@
                     <h1>تسجيل الدخول</h1>
                     <p class="login-subtitle">أهلاً بك مجدداً! يرجى تسجيل الدخول للمتابعة</p>
 
-                    <button class="btn-google-login">
+                    <button class="btn-google-login" type="button" title="يتطلب إعداد Google OAuth على الخادم">
                         تسجيل الدخول بواسطة Google
                         <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/web-24dp/logo_googleg_color_24dp.png" alt="Google">
                     </button>
 
                     <div class="login-divider">أو</div>
 
-                    <div id="loginErrorBox" style="display:none; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:12px;"></div>
+                    <form id="loginForm" onsubmit="return handleLogin(event)">
+                        <label class="login-label">رقم الهاتف</label>
+                        <div class="login-input-wrapper">
+                            <input type="tel" id="loginPhoneInput" placeholder="01xxxxxxxxx" required>
+                            <i class="fa-solid fa-phone"></i>
+                        </div>
 
-                    <label class="login-label">رقم الهاتف</label>
-                    <div class="login-input-wrapper">
-                        <input type="tel" id="loginPhoneInput" placeholder="01xxxxxxxxx">
-                        <i class="fa-solid fa-phone"></i>
-                    </div>
+                        <div class="login-label-row">
+                            <label class="login-label" style="margin:0;">كلمة المرور</label>
+                            <a href="javascript:void(0)" class="login-forgot">نسيت كلمة المرور؟</a>
+                        </div>
+                        <div class="login-input-wrapper">
+                            <input type="password" id="loginPasswordInput" placeholder="••••••••" required>
+                            <i class="fa-solid fa-lock"></i>
+                            <i class="fa-regular fa-eye login-eye-toggle" id="loginEyeIcon" onclick="togglePasswordVisibility()"></i>
+                        </div>
 
-                    <div class="login-label-row">
-                        <label class="login-label" style="margin:0;">كلمة المرور</label>
-                        <a href="javascript:void(0)" class="login-forgot">نسيت كلمة المرور؟</a>
-                    </div>
-                    <div class="login-input-wrapper">
-                        <input type="password" id="loginPasswordInput">
-                        <i class="fa-solid fa-lock"></i>
-                        <i class="fa-regular fa-eye login-eye-toggle" id="loginEyeIcon" onclick="togglePasswordVisibility()"></i>
-                    </div>
+                        <label class="login-remember">
+                            <input type="checkbox" id="loginRememberInput"> تذكرني
+                        </label>
 
-                    <label class="login-remember">
-                        <input type="checkbox"> تذكرني
-                    </label>
+                        <div id="loginMessage" class="auth-message"></div>
 
-                    <button class="btn-login-submit" id="loginSubmitBtn" onclick="handleLogin()"><i class="fa-solid fa-dumbbell"></i> تسجيل الدخول</button>
+                        <button class="btn-login-submit" type="submit" id="loginSubmitBtn"><i class="fa-solid fa-dumbbell"></i> تسجيل الدخول</button>
+                    </form>
 
                     <p class="login-security-note"><i class="fa-solid fa-lock"></i> اتصال آمن ومحمي، بياناتك في أمان تام.</p>
                 </div>
@@ -1123,68 +1137,54 @@
     </div>
 
     <script>
-        // ============================================================
-        // ربط حقيقي بالباك اند (auth) — راجع مجلد gym-backend
-        // غيّر الرابط ده لرابط السيرفر الفعلي بعد نشره على الإنترنت
-        // ============================================================
-        const API_BASE_URL = 'http://localhost:3000';
+        /* =========================================================
+           إعداد الاتصال بالباك اند
+           غيّر الرابط التالي لعنوان الخادم الحقيقي بعد نشره
+           (مثال: https://api.gym-engine.com)
+           ========================================================= */
+        const API_BASE = 'http://localhost:4000';
 
-        function saveAuth(token, user) {
-            localStorage.setItem('ge_token', token);
-            localStorage.setItem('ge_user', JSON.stringify(user));
+        // ---------- إدارة الجلسة (Token + بيانات المستخدم) ----------
+        function getToken() { return localStorage.getItem('gym_token'); }
+        function getUser() {
+            try { return JSON.parse(localStorage.getItem('gym_user')); }
+            catch { return null; }
         }
-        function getToken() { return localStorage.getItem('ge_token'); }
-        function getStoredUser() {
-            try { return JSON.parse(localStorage.getItem('ge_user') || 'null'); }
-            catch (e) { return null; }
+        function setSession(token, user) {
+            localStorage.setItem('gym_token', token);
+            localStorage.setItem('gym_user', JSON.stringify(user));
+            updateAuthUI();
         }
-        function clearAuth() {
-            localStorage.removeItem('ge_token');
-            localStorage.removeItem('ge_user');
-        }
-
-        function showAuthError(boxId, message) {
-            const box = document.getElementById(boxId);
-            box.textContent = message;
-            box.style.display = 'block';
-        }
-        function hideAuthError(boxId) {
-            document.getElementById(boxId).style.display = 'none';
+        function clearSession() {
+            localStorage.removeItem('gym_token');
+            localStorage.removeItem('gym_user');
+            updateAuthUI();
         }
 
-        function updateAuthUI() {
-            const user = getStoredUser();
-            const loggedOutBlock = document.getElementById('menuLoggedOutBlock');
-            const loggedInBlock = document.getElementById('menuLoggedInBlock');
-            if (!loggedOutBlock || !loggedInBlock) return;
-
-            if (user && getToken()) {
-                loggedOutBlock.style.display = 'none';
-                loggedInBlock.style.display = 'block';
-                document.getElementById('menuUserName').textContent = user.name;
-            } else {
-                loggedOutBlock.style.display = 'block';
-                loggedInBlock.style.display = 'none';
-            }
+        function showAuthMessage(elId, text, type) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'auth-message ' + type;
+            el.style.display = 'block';
+        }
+        function hideAuthMessage(elId) {
+            const el = document.getElementById(elId);
+            if (el) el.style.display = 'none';
         }
 
-        async function handleLogin() {
-            hideAuthError('loginErrorBox');
+        // ---------- تسجيل الدخول ----------
+        async function handleLogin(event) {
+            event.preventDefault();
+            hideAuthMessage('loginMessage');
+
             const phone = document.getElementById('loginPhoneInput').value.trim();
             const password = document.getElementById('loginPasswordInput').value;
             const btn = document.getElementById('loginSubmitBtn');
-
-            if (!phone || !password) {
-                showAuthError('loginErrorBox', 'من فضلك ادخل رقم الهاتف وكلمة المرور.');
-                return;
-            }
-
-            btn.disabled = true;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = 'جاري تسجيل الدخول...';
+            btn.disabled = true; btn.style.opacity = '0.6';
 
             try {
-                const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                const res = await fetch(API_BASE + '/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ phone, password })
@@ -1192,39 +1192,34 @@
                 const data = await res.json();
 
                 if (!res.ok) {
-                    showAuthError('loginErrorBox', data.error || 'حدث خطأ أثناء تسجيل الدخول.');
-                    return;
+                    showAuthMessage('loginMessage', data.error || 'حدث خطأ، حاول مرة أخرى', 'error');
+                    return false;
                 }
 
-                saveAuth(data.token, data.user);
-                updateAuthUI();
-                navigateTo('home');
+                setSession(data.token, data.user);
+                showAuthMessage('loginMessage', 'تم تسجيل الدخول بنجاح، جارِ التحويل...', 'success');
+                setTimeout(() => navigateTo('home'), 700);
             } catch (err) {
-                showAuthError('loginErrorBox', 'تعذّر الاتصال بالسيرفر. تأكد أن الباك اند يعمل على ' + API_BASE_URL);
+                showAuthMessage('loginMessage', 'تعذّر الاتصال بالخادم. تأكد أن الباك اند يعمل وأن API_BASE صحيح.', 'error');
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
+                btn.disabled = false; btn.style.opacity = '1';
             }
+            return false;
         }
 
-        async function handleSignup() {
-            hideAuthError('signupErrorBox');
+        // ---------- إنشاء حساب جديد ----------
+        async function handleSignup(event) {
+            event.preventDefault();
+            hideAuthMessage('signupMessage');
+
             const name = document.getElementById('signupNameInput').value.trim();
             const phone = document.getElementById('signupPhoneInput').value.trim();
             const password = document.getElementById('signupPasswordInput').value;
             const btn = document.getElementById('signupSubmitBtn');
-
-            if (!name || !phone || !password) {
-                showAuthError('signupErrorBox', 'من فضلك املأ جميع الحقول.');
-                return;
-            }
-
-            btn.disabled = true;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = 'جاري إنشاء الحساب...';
+            btn.disabled = true; btn.style.opacity = '0.6';
 
             try {
-                const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+                const res = await fetch(API_BASE + '/api/auth/signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, phone, password })
@@ -1232,28 +1227,46 @@
                 const data = await res.json();
 
                 if (!res.ok) {
-                    showAuthError('signupErrorBox', data.error || 'حدث خطأ أثناء إنشاء الحساب.');
-                    return;
+                    showAuthMessage('signupMessage', data.error || 'حدث خطأ، حاول مرة أخرى', 'error');
+                    return false;
                 }
 
-                saveAuth(data.token, data.user);
-                updateAuthUI();
-                navigateTo('home');
+                setSession(data.token, data.user);
+                showAuthMessage('signupMessage', 'تم إنشاء الحساب بنجاح، جارِ التحويل...', 'success');
+                setTimeout(() => navigateTo('home'), 700);
             } catch (err) {
-                showAuthError('signupErrorBox', 'تعذّر الاتصال بالسيرفر. تأكد أن الباك اند يعمل على ' + API_BASE_URL);
+                showAuthMessage('signupMessage', 'تعذّر الاتصال بالخادم. تأكد أن الباك اند يعمل وأن API_BASE صحيح.', 'error');
             } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
+                btn.disabled = false; btn.style.opacity = '1';
             }
+            return false;
         }
 
-        function handleLogout() {
-            clearAuth();
-            updateAuthUI();
+        // ---------- تسجيل الخروج ----------
+        function logout() {
+            clearSession();
             navigateTo('home');
         }
 
-        document.addEventListener('DOMContentLoaded', updateAuthUI);
+        // ---------- مزامنة واجهة القائمة الجانبية مع حالة تسجيل الدخول ----------
+        function updateAuthUI() {
+            const user = getUser();
+            const menuAuthArea = document.getElementById('menuAuthArea');
+            if (!menuAuthArea) return;
+
+            if (user) {
+                menuAuthArea.innerHTML =
+                    '<div style="font-size:13px; font-weight:700; color:#1e293b; margin-bottom:10px; text-align:center;">مرحباً، ' +
+                    (user.name || user.phone) + '</div>' +
+                    '<button class="btn-login-outline" onclick="logout()">تسجيل الخروج</button>';
+            } else {
+                menuAuthArea.innerHTML =
+                    '<button class="btn-login-outline" onclick="navigateTo(\'login\')">تسجيل الدخول</button>' +
+                    '<a href="javascript:void(0)" class="btn-signup-full" onclick="navigateTo(\'signup\')">ابدأ الآن مجاناً</a>';
+            }
+        }
+
+        updateAuthUI();
 
         function openMenu() { document.getElementById('sideMenu').style.display = 'block'; }
         function closeMenu() { document.getElementById('sideMenu').style.display = 'none'; }

@@ -1,254 +1,146 @@
-'use strict';
-/**
- * Gym Engine - خادم مصادقة (Auth Backend) بسيط
- * -------------------------------------------------
- * بدون أي مكتبات خارجية (zero dependencies) — يعتمد فقط على وحدات Node.js
- * المدمجة (http, crypto, fs) حتى يعمل مباشرة بأمر: node server.js
- *
- * نقاط النهاية المتاحة:
- *   POST /api/auth/signup   { phone, password, name? } -> { token, user }
- *   POST /api/auth/login    { phone, password }         -> { token, user }
- *   GET  /api/auth/me       (Authorization: Bearer <token>) -> { user }
- *   POST /api/auth/logout   -> { ok: true }  (تسجيل الخروج فعلياً يتم بحذف
- *                               التوكن من طرف العميل، هذا المسار للتوافق فقط)
- */
-const http = require('http');
-const { hashPassword, verifyPassword, signToken, verifyToken } = require('./auth');
-const { findUserByPhone, createUser, publicUser } = require('./db');
+// ============================================================
+// Arimas Gym - Backend حقيقي لتسجيل الدخول وإنشاء الحسابات
+// Node.js + Express + SQLite + bcrypt + JWT
+// ============================================================
 
-const PORT = process.env.PORT || 4000;
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const Database = require('better-sqlite3');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
 
-// اسمح بأصل الواجهة الأمامية (غيّرها لنطاقك الحقيقي بعد النشر)
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
-// ---------------------------------------------------------------------------
-// حد بسيط لعدد محاولات تسجيل الدخول لكل IP لمنع هجمات التخمين (Brute-force)
-// ---------------------------------------------------------------------------
-const LOGIN_ATTEMPTS = new Map(); // ip -> { count, firstAttemptAt }
-const MAX_ATTEMPTS = 10;
-const WINDOW_MS = 15 * 60 * 1000; // 15 دقيقة
-
-function isRateLimited(ip) {
-  const entry = LOGIN_ATTEMPTS.get(ip);
-  const now = Date.now();
-  if (!entry) return false;
-  if (now - entry.firstAttemptAt > WINDOW_MS) {
-    LOGIN_ATTEMPTS.delete(ip);
-    return false;
-  }
-  return entry.count >= MAX_ATTEMPTS;
+if (!process.env.JWT_SECRET) {
+  console.warn('⚠️  تحذير: لم يتم ضبط JWT_SECRET في .env — استخدم مفتاحاً سرياً قوياً قبل النشر الفعلي.');
 }
 
-function registerAttempt(ip) {
-  const now = Date.now();
-  const entry = LOGIN_ATTEMPTS.get(ip);
-  if (!entry || now - entry.firstAttemptAt > WINDOW_MS) {
-    LOGIN_ATTEMPTS.set(ip, { count: 1, firstAttemptAt: now });
-  } else {
-    entry.count += 1;
-  }
-}
+// ------------------------------------------------------------
+// قاعدة البيانات (SQLite - ملف واحد، لا يحتاج سيرفر منفصل)
+// ------------------------------------------------------------
+const db = new Database(path.join(__dirname, 'arimasgym.db'));
+db.pragma('journal_mode = WAL');
 
-function clearAttempts(ip) {
-  LOGIN_ATTEMPTS.delete(ip);
-}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT UNIQUE NOT NULL,
+    email TEXT,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
-// ---------------------------------------------------------------------------
-// أدوات مساعدة للطلب/الاستجابة
-// ---------------------------------------------------------------------------
-function sendJson(res, statusCode, payload) {
-  const body = JSON.stringify(payload);
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  });
-  res.end(body);
-}
+// ------------------------------------------------------------
+// الإعداد العام
+// ------------------------------------------------------------
+const app = express();
+app.use(cors({ origin: CORS_ORIGIN }));
+app.use(express.json());
 
-function readJsonBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    let size = 0;
-    const MAX_SIZE = 1e6; // 1MB حد أقصى لحجم الطلب
-    req.on('data', (chunk) => {
-      size += chunk.length;
-      if (size > MAX_SIZE) {
-        reject(new Error('PAYLOAD_TOO_LARGE'));
-        req.destroy();
-        return;
-      }
-      data += chunk;
-    });
-    req.on('end', () => {
-      if (!data) return resolve({});
-      try {
-        resolve(JSON.parse(data));
-      } catch {
-        reject(new Error('INVALID_JSON'));
-      }
-    });
-    req.on('error', reject);
-  });
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return req.socket.remoteAddress || 'unknown';
-}
-
-function getBearerToken(req) {
-  const header = req.headers['authorization'] || '';
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1] : null;
-}
-
-// ---------------------------------------------------------------------------
-// التحقق من صحة المدخلات
-// ---------------------------------------------------------------------------
-function validatePhone(phone) {
-  return typeof phone === 'string' && /^[0-9+\s-]{8,15}$/.test(phone.trim());
-}
-
-function validatePassword(password) {
-  return typeof password === 'string' && password.length >= 6;
-}
-
-// ---------------------------------------------------------------------------
-// المسارات (Routes)
-// ---------------------------------------------------------------------------
-async function handleSignup(req, res) {
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    return sendJson(res, 400, { error: 'طلب غير صالح' });
-  }
-
-  const phone = (body.phone || '').trim();
-  const password = body.password || '';
-  const name = (body.name || '').trim();
-
-  if (!validatePhone(phone)) {
-    return sendJson(res, 400, { error: 'رقم الهاتف غير صالح' });
-  }
-  if (!validatePassword(password)) {
-    return sendJson(res, 400, { error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
-  }
-
-  if (findUserByPhone(phone)) {
-    return sendJson(res, 409, { error: 'رقم الهاتف مسجّل مسبقاً' });
-  }
-
-  let user;
-  try {
-    const passwordHash = hashPassword(password);
-    user = await createUser({ phone, name, passwordHash });
-  } catch (err) {
-    if (err.message === 'PHONE_ALREADY_EXISTS') {
-      return sendJson(res, 409, { error: 'رقم الهاتف مسجّل مسبقاً' });
-    }
-    console.error(err);
-    return sendJson(res, 500, { error: 'حدث خطأ في الخادم' });
-  }
-
-  const token = signToken({ sub: user.id, phone: user.phone });
-  return sendJson(res, 201, { token, user: publicUser(user) });
-}
-
-async function handleLogin(req, res) {
-  const ip = getClientIp(req);
-
-  if (isRateLimited(ip)) {
-    return sendJson(res, 429, { error: 'محاولات كثيرة جداً، حاول لاحقاً بعد 15 دقيقة' });
-  }
-
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch {
-    return sendJson(res, 400, { error: 'طلب غير صالح' });
-  }
-
-  const phone = (body.phone || '').trim();
-  const password = body.password || '';
-
-  const user = findUserByPhone(phone);
-  const passwordOk = user ? verifyPassword(password, user.passwordHash) : false;
-
-  if (!user || !passwordOk) {
-    registerAttempt(ip);
-    return sendJson(res, 401, { error: 'رقم الهاتف أو كلمة المرور غير صحيحة' });
-  }
-
-  clearAttempts(ip);
-  const token = signToken({ sub: user.id, phone: user.phone });
-  return sendJson(res, 200, { token, user: publicUser(user) });
-}
-
-async function handleMe(req, res) {
-  const token = getBearerToken(req);
-  const payload = verifyToken(token);
-  if (!payload) {
-    return sendJson(res, 401, { error: 'غير مصرح — سجّل الدخول مجدداً' });
-  }
-  const { findUserById } = require('./db');
-  const user = findUserById(payload.sub);
-  if (!user) {
-    return sendJson(res, 404, { error: 'المستخدم غير موجود' });
-  }
-  return sendJson(res, 200, { user: publicUser(user) });
-}
-
-async function handleLogout(req, res) {
-  // JWT عديم الحالة (stateless) — تسجيل الخروج الفعلي يتم بحذف التوكن
-  // من طرف العميل. هذا المسار موجود للتوافق مع أي منطق عميل يستدعيه.
-  return sendJson(res, 200, { ok: true });
-}
-
-// ---------------------------------------------------------------------------
-// المُوجّه الرئيسي (Router)
-// ---------------------------------------------------------------------------
-const server = http.createServer(async (req, res) => {
-  // دعم CORS لطلبات Preflight
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    });
-    return res.end();
-  }
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
-
-  try {
-    if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
-      return await handleSignup(req, res);
-    }
-    if (req.method === 'POST' && url.pathname === '/api/auth/login') {
-      return await handleLogin(req, res);
-    }
-    if (req.method === 'GET' && url.pathname === '/api/auth/me') {
-      return await handleMe(req, res);
-    }
-    if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
-      return await handleLogout(req, res);
-    }
-    if (req.method === 'GET' && url.pathname === '/health') {
-      return sendJson(res, 200, { status: 'ok' });
-    }
-
-    return sendJson(res, 404, { error: 'المسار غير موجود' });
-  } catch (err) {
-    console.error(err);
-    return sendJson(res, 500, { error: 'حدث خطأ في الخادم' });
-  }
+// تحديد عدد المحاولات على مسارات المصادقة لمنع الهجمات
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'محاولات كثيرة جداً، حاول مرة أخرى بعد قليل.' }
 });
 
-server.listen(PORT, () => {
-  console.log(`✅ Gym Engine Auth Backend يعمل على المنفذ ${PORT}`);
-  console.log(`   الصحة: http://localhost:${PORT}/health`);
+// ------------------------------------------------------------
+// أدوات مساعدة
+// ------------------------------------------------------------
+function signToken(user) {
+  return jwt.sign({ sub: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+function toPublicUser(user) {
+  return { id: user.id, name: user.name, phone: user.phone, email: user.email, created_at: user.created_at };
+}
+
+function isValidPhone(phone) {
+  return typeof phone === 'string' && /^01[0-9]{9}$/.test(phone.trim());
+}
+
+function authMiddleware(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'يجب تسجيل الدخول أولاً.' });
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(payload.sub);
+    if (!user) return res.status(401).json({ error: 'المستخدم غير موجود.' });
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'جلسة غير صالحة أو منتهية، سجل الدخول من جديد.' });
+  }
+}
+
+// ------------------------------------------------------------
+// مسارات المصادقة
+// ------------------------------------------------------------
+
+// إنشاء حساب جديد
+app.post('/api/auth/register', authLimiter, (req, res) => {
+  const { name, phone, email, password } = req.body || {};
+
+  if (!name || !name.trim()) return res.status(400).json({ error: 'الاسم مطلوب.' });
+  if (!isValidPhone(phone)) return res.status(400).json({ error: 'رقم الهاتف غير صالح، يجب أن يكون رقماً مصرياً مكوناً من 11 رقم.' });
+  if (!password || password.length < 6) return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.' });
+
+  const existing = db.prepare('SELECT id FROM users WHERE phone = ?').get(phone.trim());
+  if (existing) return res.status(409).json({ error: 'هذا الرقم مسجل بالفعل، جرب تسجيل الدخول.' });
+
+  const passwordHash = bcrypt.hashSync(password, 10);
+
+  const info = db.prepare(
+    'INSERT INTO users (name, phone, email, password_hash) VALUES (?, ?, ?, ?)'
+  ).run(name.trim(), phone.trim(), (email || '').trim(), passwordHash);
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+  const token = signToken(user);
+
+  res.status(201).json({ token, user: toPublicUser(user) });
 });
+
+// تسجيل الدخول
+app.post('/api/auth/login', authLimiter, (req, res) => {
+  const { phone, password } = req.body || {};
+
+  if (!phone || !password) return res.status(400).json({ error: 'رقم الهاتف وكلمة المرور مطلوبان.' });
+
+  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone.trim());
+  if (!user) return res.status(401).json({ error: 'رقم الهاتف أو كلمة المرور غير صحيحة.' });
+
+  const ok = bcrypt.compareSync(password, user.password_hash);
+  if (!ok) return res.status(401).json({ error: 'رقم الهاتف أو كلمة المرور غير صحيحة.' });
+
+  const token = signToken(user);
+  res.json({ token, user: toPublicUser(user) });
+});
+
+// بيانات المستخدم الحالي (مسار محمي بالتوكن)
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  res.json({ user: toPublicUser(req.user) });
+});
+
+// فحص صحة السيرفر
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+app.use((req, res) => res.status(404).json({ error: 'المسار غير موجود.' }));
+
+app.listen(PORT, () => {
+  console.log(`✅ Arimas Gym backend يعمل على http://localhost:${PORT}`);
+});
+

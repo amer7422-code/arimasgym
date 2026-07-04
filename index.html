@@ -1282,7 +1282,7 @@
             btn.innerHTML = 'جاري إنشاء الحساب...';
 
             try {
-                const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+                const res = await fetch(`${API_BASE_URL}/api/auth/signup`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, phone, password })
@@ -1353,8 +1353,8 @@
             if (!user) return;
             document.getElementById('dashUserName').textContent = user.name || '-';
             document.getElementById('dashUserPhone').textContent = user.phone || '-';
-            if (user.created_at) {
-                const d = new Date(user.created_at);
+            if (user.createdAt) {
+                const d = new Date(user.createdAt);
                 document.getElementById('dashUserSince').textContent = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
             }
         }

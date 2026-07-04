@@ -1,14 +1,19 @@
 {
-  "name": "gym-engine-auth-backend",
+  "name": "arimasgym-backend",
   "version": "1.0.0",
-  "description": "خادم مصادقة بسيط لموقع Gym Engine - بدون أي مكتبات خارجية",
+  "description": "باك اند حقيقي لتسجيل الدخول وإنشاء الحسابات لمنصة Arimas Gym",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "engines": {
-    "node": ">=18"
-  },
-  "license": "MIT"
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express-rate-limit": "^7.4.0"
+  }
 }

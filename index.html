@@ -376,6 +376,11 @@
 
         .hr-domain-badge { text-align: center; margin-top: 10px; }
         .hr-domain-badge span { background: #0f172a; color: white; padding: 8px 20px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-block; }
+        .dash-module-card { position: relative; }
+        .dash-module-card h3 { display: flex; align-items: center; gap: 8px; }
+        .dash-module-card h3 i { color: #3b82f6; }
+        .dash-module-desc { font-size: 12.5px; color: #64748b; line-height: 1.6; }
+        .dash-badge-soon { position: absolute; top: 18px; left: 18px; background: #f1f5f9; color: #64748b; font-size: 10.5px; font-weight: 700; padding: 3px 10px; border-radius: 10px; }
 
         /* ========================================= */
         /* عنصر مسار التنقل (Breadcrumb) - مشترك لصفحات الموارد */
@@ -523,6 +528,7 @@
             </div>
             <div id="menuLoggedInBlock" style="display:none;">
                 <p style="font-size:13px; color:#64748b; margin-bottom:10px;">مسجل الدخول كـ <strong id="menuUserName"></strong></p>
+                <button class="btn-login-outline" onclick="navigateTo('dashboard')" style="margin-bottom:10px;">لوحة التحكم</button>
                 <button class="btn-login-outline" onclick="handleLogout()">تسجيل الخروج</button>
             </div>
         </div>
@@ -802,6 +808,58 @@
             </div>
         </footer>
 
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- صفحة: لوحة التحكم (بعد تسجيل الدخول) -->
+    <!-- ============================================================= -->
+    <div id="page-dashboard" class="app-page">
+        <div class="resource-breadcrumb">
+            <span class="current">لوحة التحكم</span> / <a href="javascript:void(0)" onclick="handleLogout()">تسجيل الخروج</a>
+        </div>
+        <div class="container">
+
+            <div class="hr-hero-card">
+                <div class="hr-icon-wrapper"><i class="fa-solid fa-gauge-high"></i></div>
+                <h1>أهلاً، <span id="dashUserName">-</span> 👋</h1>
+                <p>لوحة تحكم Arimas Gym — من هنا هتقدر تدير أعضاء الجيم، الاشتراكات، الحضور، والمدفوعات.</p>
+
+                <div class="hr-stats-grid">
+                    <div class="hr-stat-card hr-stat-blue"><p>رقم الهاتف</p><h4 id="dashUserPhone" style="font-size:16px;">-</h4></div>
+                    <div class="hr-stat-card hr-stat-green"><p>عضو منذ</p><h4 id="dashUserSince" style="font-size:16px;">-</h4></div>
+                    <div class="hr-stat-card hr-stat-purple"><p>حالة الحساب</p><h4 style="font-size:16px;">نشط</h4></div>
+                </div>
+            </div>
+
+            <div class="hr-content-card">
+                <h2>أقسام إدارة الجيم</h2>
+                <div class="hr-modules-grid">
+                    <div class="hr-module-card dash-module-card">
+                        <h3><i class="fa-solid fa-users"></i> إدارة الأعضاء</h3>
+                        <p class="dash-module-desc">إضافة أعضاء جدد، متابعة بياناتهم وحالة اشتراكاتهم.</p>
+                        <span class="dash-badge-soon">قريباً</span>
+                    </div>
+                    <div class="hr-module-card dash-module-card">
+                        <h3><i class="fa-solid fa-id-card"></i> الاشتراكات</h3>
+                        <p class="dash-module-desc">ربط كل عضو بباقة، مدة اشتراك، وتاريخ تجديد.</p>
+                        <span class="dash-badge-soon">قريباً</span>
+                    </div>
+                    <div class="hr-module-card dash-module-card">
+                        <h3><i class="fa-solid fa-calendar-check"></i> الحضور والانصراف</h3>
+                        <p class="dash-module-desc">تسجيل حضور الأعضاء يومياً ومتابعة الالتزام.</p>
+                        <span class="dash-badge-soon">قريباً</span>
+                    </div>
+                    <div class="hr-module-card dash-module-card">
+                        <h3><i class="fa-solid fa-file-invoice-dollar"></i> المدفوعات والفواتير</h3>
+                        <p class="dash-module-desc">تسجيل الدفعات، إصدار فواتير، ومتابعة المتأخرات.</p>
+                        <span class="dash-badge-soon">قريباً</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hr-domain-badge"><span>arimasgym.com</span></div>
+
+        </div>
     </div>
 
     <!-- ============================================================= -->
@@ -1198,7 +1256,7 @@
 
                 saveAuth(data.token, data.user);
                 updateAuthUI();
-                navigateTo('home');
+                navigateTo('dashboard');
             } catch (err) {
                 showAuthError('loginErrorBox', 'تعذّر الاتصال بالسيرفر. تأكد أن الباك اند يعمل على ' + API_BASE_URL);
             } finally {
@@ -1238,7 +1296,7 @@
 
                 saveAuth(data.token, data.user);
                 updateAuthUI();
-                navigateTo('home');
+                navigateTo('dashboard');
             } catch (err) {
                 showAuthError('signupErrorBox', 'تعذّر الاتصال بالسيرفر. تأكد أن الباك اند يعمل على ' + API_BASE_URL);
             } finally {
@@ -1271,17 +1329,34 @@
         }
 
         function navigateTo(page) {
+            if (page === 'dashboard' && !(getToken() && getStoredUser())) {
+                page = 'login';
+            }
+
             document.querySelectorAll('.app-page').forEach(el => el.classList.remove('active'));
             document.getElementById('page-' + page).classList.add('active');
 
-            const showChrome = (page === 'home' || page === 'hr' || page === 'accounting');
+            const showChrome = (page === 'home' || page === 'hr' || page === 'accounting' || page === 'dashboard');
             document.getElementById('aiTopBar').style.display = showChrome ? 'flex' : 'none';
             document.getElementById('mainHeader').style.display = showChrome ? 'flex' : 'none';
             document.body.style.paddingTop = showChrome ? '35px' : '0';
             document.body.style.backgroundColor = page === 'signup' ? '#060913' : '#f8fafc';
 
+            if (page === 'dashboard') fillDashboard();
+
             closeMenu();
             window.scrollTo(0, 0);
+        }
+
+        function fillDashboard() {
+            const user = getStoredUser();
+            if (!user) return;
+            document.getElementById('dashUserName').textContent = user.name || '-';
+            document.getElementById('dashUserPhone').textContent = user.phone || '-';
+            if (user.created_at) {
+                const d = new Date(user.created_at);
+                document.getElementById('dashUserSince').textContent = d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
         }
 
         document.querySelectorAll('.faq-trigger').forEach(trigger => {

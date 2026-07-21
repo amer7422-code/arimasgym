@@ -10,7 +10,7 @@ import { JwtPayload } from './jwt.strategy';
 export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
   constructor(
     private readonly config: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaService
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),

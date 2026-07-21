@@ -13,7 +13,7 @@ import { LoginDto } from './dto/login.dto';
 
 const BCRYPT_SALT_ROUNDS = 12;
 
-interface Tokens {
+export interface Tokens {
   accessToken: string;
   refreshToken: string;
 }
@@ -23,7 +23,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
-    private readonly config: ConfigService,
+    private readonly config: ConfigService
   ) {}
 
   async register(dto: RegisterDto) {
@@ -43,7 +43,7 @@ export class AuthService {
         email: dto.email,
         passwordHash,
         // لا نسمح بتمرير role=ADMIN من الـ DTO مباشرة (تحقق أمني إضافي على مستوى الـ Service)
-        role: dto.role === 'ADMIN' ? 'MEMBER' : dto.role ?? 'MEMBER',
+        role: dto.role === 'ADMIN' ? 'MEMBER' : (dto.role ?? 'MEMBER'),
       },
     });
 

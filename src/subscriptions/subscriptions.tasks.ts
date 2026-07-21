@@ -24,7 +24,10 @@ export class SubscriptionsTasks {
       }
     } catch (error) {
       // لا نسمح لفشل هذه المهمة بإيقاف تشغيل الخادم - فقط نسجّل الخطأ لمراجعته
-      this.logger.error('فشلت مهمة تحديث الاشتراكات المنتهية', error instanceof Error ? error.stack : error);
+      this.logger.error(
+        'فشلت مهمة تحديث الاشتراكات المنتهية',
+        error instanceof Error ? error.stack : error
+      );
     }
   }
 }

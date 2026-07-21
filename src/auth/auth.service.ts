@@ -13,7 +13,7 @@ import { LoginDto } from './dto/login.dto';
 
 const BCRYPT_SALT_ROUNDS = 12;
 
-interface Tokens {
+export interface Tokens {
   accessToken: string;
   refreshToken: string;
 }
